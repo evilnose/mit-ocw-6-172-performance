@@ -1,0 +1,81 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#if 0
+1.2 Answer
+The issue is that for size 512, when I am writing to each column of
+the output matrix, they all map to the same cache set. Need to pretend
+that the row length is something not a multiple of 2 so that they map to
+different sets as in 511/513.
+
+For larger matrix sizes like 2048, the cache is full after 2 rows are
+rotated and so there will be capacity misses and the effect of conflict
+misses become diminished, i.e. when writing to the next column of the 
+output matrix the previous column has already been evicted from the cache
+due to over-filling.
+#endif
+
+/* Typedefs */
+
+typedef uint32_t pixel_t;
+
+/* Function declarations */
+
+int getIndex(int x, int y, int d);
+
+/* Function definitions */
+
+// This is the function that does the actual rotation.
+// Only time spent in this function is reported by the testbed.
+void rotate_main(pixel_t *dest, const pixel_t *src, int n) 
+{
+#define BN 25
+#define BM 12
+  int i, j, ii, jj;
+  for (i = 0; i < n; i+=BN) {
+    for (j = 0; j < n; j+=BM) {
+			int ilim = BN + i;
+			ilim = ilim ^ ((n ^ ilim) & -(n < ilim));
+			int jlim = BM + j;
+			jlim = jlim ^ ((n ^ jlim) & -(n < jlim));
+			for (ii = i; ii < ilim; ii++) {
+				for (jj = j; jj < jlim; jj++) {
+					dest[getIndex(n - 1 - jj, ii, n)] = src[getIndex(ii, jj, n)];
+				}
+#if 0
+				int arr[BM];
+				int t;
+				for (t = 0; t < jlim - j; t++){
+					arr[t] = src[getIndex(ii, j + t, n)];
+				}
+				for (t = 0; t < jlim - j; t++) {
+					dest[getIndex(n - 1 - t - j, ii, n)] = src[getIndex(ii, t + j, n)];
+				}
+#endif
+			}
+    }
+  }
+}
+
+/* Helper function definitions
+
+   These functions must be modified if you make any changes
+   to the data layout of the matrices being rotated. They are
+   helper functions used during allocation, initialization,
+   printing, and correctness checking. */
+
+// This function returns the number of bytes needed to store
+// an nxn matrix.
+uint64_t getAllocationSize(int n)
+{
+  return n * n * sizeof(pixel_t);
+}
+
+// This function translates a 2D index pair (x, y) into a linear array index.
+// Assumes matrix is stored in row-major order and the row stride is d.
+int getIndex(int x, int y, int d)
+{
+  return x * d + y;
+}
+
